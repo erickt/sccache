@@ -30,7 +30,7 @@ if not sys.stdout.encoding:
 if not sys.stderr.encoding:
     sys.stderr = codecs.getwriter(locale.getpreferredencoding())(sys.stderr);
 
-if __name__ == '__main__':
+def main():
     cmd = sys.argv[1:]
     if cmd:
         data = {
@@ -105,4 +105,7 @@ if __name__ == '__main__':
     sys.stdout.write(result.get('stdout', ''))
     sys.stdout.flush()
 
-    sys.exit(retcode)
+    return retcode
+
+if __name__ == '__main__':
+    sys.exit(main())
