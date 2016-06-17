@@ -16,4 +16,4 @@ setup-pip: requirements.txt
 	env PATH=$(VENV_DIR)/bin:$(PATH) $(VENV_DIR)/bin/pip install -r requirements.txt
 
 clean:
-	rm -rf venv
+	rm -rf venv *.egg-info

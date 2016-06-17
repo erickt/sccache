@@ -88,8 +88,8 @@ def _start_server():
 @click.option('--hostname', default='localhost', help='connect to server on this hostname (default localhost)')
 @click.option('--port', default=PORT, help='connect to server on this port (default %s)' % (PORT,))
 @click.option('--start-server/--no-start-server', default=True, help='start the server (default true)')
-def cli(hostname, port, start_server):
-    cmd = sys.argv[1:]
+@click.argument('cmd', nargs=-1)
+def cli(hostname, port, start_server, cmd):
     if cmd:
         data = {
             'cmd': cmd,
@@ -114,6 +114,8 @@ def cli(hostname, port, start_server):
     retcode = result.get('retcode', 1)
     # The server returns a code -2 when the command line can't be handled.
     if retcode == -2:
+        print >> sys.stderr, 'failed to run code on server', result
+
         import subprocess
         return subprocess.call(cmd)
 

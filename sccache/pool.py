@@ -4,12 +4,15 @@
 
 # Multiprocess/thread job pool with a non-fixed number of processes/threads.
 
+import logging
 import multiprocessing.queues
 import os
 import sys
 from multiprocessing import Process
 from threading import Thread, current_thread
 from Queue import Queue, Empty
+
+LOG = logging.getLogger(__name__)
 
 
 class AdaptivePool(object):

@@ -25,6 +25,7 @@ import base_server
 import click
 import hashlib
 import json
+import logging
 import os
 import sys
 from cStringIO import StringIO
@@ -47,6 +48,7 @@ from threading import Thread, Event
 # defined".
 FILE = __file__
 
+LOG = logging.getLogger(__name__)
 
 class CommandHandler(base_server.CommandHandler):
     '''
@@ -159,8 +161,10 @@ class CommandServer(base_server.CommandServer):
         try:
             parsed_args = compiler.parse_arguments(args)
         except CannotCacheError:
+            LOG.exception('could not cache')
             self.stats['non-cachable'] += 1
         except NotACompilationError:
+            LOG.info('not a compilation')
             self.stats['non-compile'] += 1
 
         if not parsed_args:
@@ -303,6 +307,8 @@ def _run_command(job):
     '''
     Job handler for compilation and caching.
     '''
+    LOG.debug('running %s', job)
+
     id = job['id']
     compiler = job['compiler']
     args = job['args']
@@ -382,10 +388,13 @@ def run_command(job):
     '''
     Wrapper around _run_command, used to handle exceptions there gracefully.
     '''
+    LOG.debug('running %s', job)
+
     try:
         for result in _run_command(job):
             yield result
     except Exception as e:
+        LOG.exception('Error running command')
         import traceback
         yield dict(id=job['id'], retcode=1, stderr=traceback.format_exc())
 
@@ -394,10 +403,16 @@ def run_command(job):
 @click.option('--hostname', default='localhost', help='start server on this hostname (default localhost)')
 @click.option('--port', default=PORT, help='start server on this port (default %s)' % (PORT,))
 def cli(hostname, port):
+    logging.basicConfig()
+    logging.getLogger('sccache').setLevel(logging.DEBUG)
+    logging.getLogger('boto').setLevel(logging.INFO)
+
+    logging.info('Starting server')
     server = CommandServer((hostname, port))
     try:
         server.loop()
     finally:
+        logging.info('Stopping server')
         server.stop()
 
 if __name__ == '__main__':

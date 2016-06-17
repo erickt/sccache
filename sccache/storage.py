@@ -10,6 +10,9 @@ import os
 import socket
 import time
 import urllib2
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 def ensure_dir(path):
@@ -173,8 +176,10 @@ class S3CompatibleStorage(Storage):
         try:
             data = self._url_opener.open(url, timeout=5).read()
             _last_stats['size'] = len(data)
+            LOG.info('found %s in cache', key)
             return data
         except Exception as e:
+            LOG.info('could not find %s in cache', key)
             if not isinstance(e, urllib2.HTTPError) or e.code not in (404, 403):
                 self._failed = True
             return None
@@ -185,6 +190,8 @@ class S3CompatibleStorage(Storage):
     def put(self, key, data):
         # Store the given data on S3, and set an acl at the same time to allow
         # public HTTP GETs later on (which we use in get())
+        LOG.info('caching %s in s3', key)
+
         _last_stats.clear()
         _last_stats['size'] = len(data)
         try:
@@ -196,6 +203,8 @@ class S3CompatibleStorage(Storage):
             })
             return True
         except Exception as e:
+            LOG.exception('failed to cache %s', key)
+
             from boto.exception import S3ResponseError
             if isinstance(e, S3ResponseError) and e.status == 403 and \
                     e.error_code == 'SignatureDoesNotMatch':
