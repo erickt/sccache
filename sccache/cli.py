@@ -13,12 +13,13 @@
 # The client-server model allows the server to be more efficient in its
 # handling of the remote storage.
 
+import click
+import codecs
 import json
+import locale
 import os
 import socket
 import sys
-import codecs
-import locale
 from base_server import CommandClient, PORT
 from errno import ECONNREFUSED
 
@@ -30,7 +31,64 @@ if not sys.stdout.encoding:
 if not sys.stderr.encoding:
     sys.stderr = codecs.getwriter(locale.getpreferredencoding())(sys.stderr);
 
-def main():
+def _start_server():
+    import subprocess
+    import time
+    if sys.platform == 'win32':
+        # DETACHED_PROCESS makes the process independent of the console
+        # we're running from, and doesn't make the parent process block
+        # until the server terminates. On windows, close_fds conflicts
+        # with providing stdin/stdout/stderr.
+        proc = subprocess.Popen([sys.executable,
+            os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                'server.py')],
+            close_fds=True,
+            creationflags=8, # DETACHED_PROCESS
+        )
+    else:
+        proc = subprocess.Popen([sys.executable,
+            os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                'server.py')],
+            stdin=open(os.devnull, 'r'),
+            stdout=open(os.devnull, 'w'),
+            stderr=subprocess.STDOUT,
+            close_fds=True,
+        )
+    # Try connecting as long as the server process is initializing, and
+    # the port is still not listening.
+    while proc.returncode is None:
+        time.sleep(0.001)
+        try:
+            client = CommandClient(('localhost', PORT))
+            result = client.request(data)
+        except socket.error as e:
+            if e.errno == ECONNREFUSED: # Connection refused
+                proc.poll()
+                continue
+        break
+    # If the server process failed to start, it may be because another
+    # client was racing with us and started another server process which
+    # bound the port, which our server couldn't bind as a consequence.
+    if proc.returncode:
+        try:
+            client = CommandClient(('localhost', PORT))
+            result = client.request(data)
+        except socket.error as e:
+            if e.errno == ECONNREFUSED: # Connection refused
+                raise RuntimeError("Couldn't start server. Try running it manually to find out why:\n\t%s %s" % (
+                    sys.executable,
+                    os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                                 'server.py'),
+                ))
+
+    return result
+
+
+@click.command()
+@click.option('--hostname', default='localhost', help='connect to server on this hostname (default localhost)')
+@click.option('--port', default=PORT, help='connect to server on this port (default %s)' % (PORT,))
+@click.option('--start-server/--no-start-server', default=True, help='start the server (default true)')
+def cli(hostname, port, start_server):
     cmd = sys.argv[1:]
     if cmd:
         data = {
@@ -41,65 +99,24 @@ def main():
         data = None
 
     try:
-        client = CommandClient(('localhost', PORT))
+        client = CommandClient((hostname, port))
         result = client.request(data)
     except socket.error as e:
         if e.errno != ECONNREFUSED: # Connection refused
             raise
-        import subprocess
-        import time
-        if sys.platform == 'win32':
-            # DETACHED_PROCESS makes the process independent of the console
-            # we're running from, and doesn't make the parent process block
-            # until the server terminates. On windows, close_fds conflicts
-            # with providing stdin/stdout/stderr.
-            proc = subprocess.Popen([sys.executable,
-                os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                    'server.py')],
-                close_fds=True,
-                creationflags=8, # DETACHED_PROCESS
-            )
+
+        if start_server:
+            result = _start_server()
         else:
-            proc = subprocess.Popen([sys.executable,
-                os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                    'server.py')],
-                stdin=open(os.devnull, 'r'),
-                stdout=open(os.devnull, 'w'),
-                stderr=subprocess.STDOUT,
-                close_fds=True,
-            )
-        # Try connecting as long as the server process is initializing, and
-        # the port is still not listening.
-        while proc.returncode is None:
-            time.sleep(0.001)
-            try:
-                client = CommandClient(('localhost', PORT))
-                result = client.request(data)
-            except socket.error as e:
-                if e.errno == ECONNREFUSED: # Connection refused
-                    proc.poll()
-                    continue
-            break
-        # If the server process failed to start, it may be because another
-        # client was racing with us and started another server process which
-        # bound the port, which our server couldn't bind as a consequence.
-        if proc.returncode:
-            try:
-                client = CommandClient(('localhost', PORT))
-                result = client.request(data)
-            except socket.error as e:
-                if e.errno == ECONNREFUSED: # Connection refused
-                    raise RuntimeError("Couldn't start server. Try running it manually to find out why:\n\t%s %s" % (
-                        sys.executable,
-                        os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                                     'server.py'),
-                    ))
+            print >> sys.stderr, 'sccache server is not running'
+            return 1
 
     retcode = result.get('retcode', 1)
     # The server returns a code -2 when the command line can't be handled.
     if retcode == -2:
         import subprocess
-        sys.exit(subprocess.call(cmd))
+        return subprocess.call(cmd)
+
     sys.stderr.write(result.get('stderr', ''))
     sys.stderr.flush()
     sys.stdout.write(result.get('stdout', ''))

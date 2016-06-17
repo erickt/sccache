@@ -72,6 +72,7 @@ class Storage(object):
             yield LocalStorage(directory)
 
         bucket_name = os.environ.get('SCCACHE_BUCKET')
+        print 'HEY', bucket_name
         if bucket_name:
             storage = BotoStorage(bucket_name,
                 dns_server=os.environ.get('SCCACHE_NAMESERVER'))

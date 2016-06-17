@@ -22,6 +22,7 @@
 # Compiler.parsed_args()['output'].
 
 import base_server
+import click
 import hashlib
 import json
 import os
@@ -389,5 +390,15 @@ def run_command(job):
         yield dict(id=job['id'], retcode=1, stderr=traceback.format_exc())
 
 
+@click.command()
+@click.option('--hostname', default='localhost', help='start server on this hostname (default localhost)')
+@click.option('--port', default=PORT, help='start server on this port (default %s)' % (PORT,))
+def cli(hostname, port):
+    server = CommandServer((hostname, port))
+    try:
+        server.loop()
+    finally:
+        server.stop()
+
 if __name__ == '__main__':
-    server = CommandServer(('localhost', PORT))
+    sys.exit(main())

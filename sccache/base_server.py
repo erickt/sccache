@@ -55,8 +55,6 @@ class CommandServer(object):
             lambda socket: socket.close()
         )
 
-        Thread(target=self._listeners_and_readers_loop).start()
-
     def handle_request(self, request, dispatcher):
         # Our dispatchers are meant to wait for a write after having read the
         # request. Switch them to the writers dict.
@@ -73,13 +71,10 @@ class CommandServer(object):
         # contains a reference. We don't need a local reference.
         ConnectedDispatcher(self, sock, self._listeners_and_readers)
 
-    def _listeners_and_readers_loop(self):
+    def loop(self):
         while self._listeners_and_readers or not self.stopping:
-            try:
-                asyncore.loop(count=1, timeout=1,
-                    map=self._listeners_and_readers)
-            except:
-                pass
+            asyncore.loop(count=1, timeout=1,
+                map=self._listeners_and_readers)
 
     def _writers_loop(self, writers):
         asyncore.loop(map=writers)
@@ -96,7 +91,9 @@ class CommandServer(object):
         # Just spawn a new thread for each writer, it's simpler than having to
         # deal with being stuck in select() when a new connection is ready to
         # write.
-        Thread(target=self._writers_loop, args=(writers, )).start()
+        thread = Thread(target=self._writers_loop, args=(writers,))
+        thread.setDaemon(True)
+        thread.start()
 
     def stop(self):
         self.stopping = True

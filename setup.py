@@ -25,7 +25,8 @@ setup(
     install_requires=reqs,
     entry_points={
         'console_scripts': [
-            'sccache = sccache.cli:main',
+            'sccache = sccache.cli:cli',
+            'sccache-server = sccache.server:cli',
         ],
     }
 )
